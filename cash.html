@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Касса — подсчёт денег</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f0f2f5;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+  }
+  .container {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    padding: 24px;
+    width: 100%;
+    max-width: 460px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 16px;
+    text-align: center;
+    color: #1a1a1a;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    padding: 8px 6px;
+    border-bottom: 2px solid #eee;
+  }
+  th:last-child, td:last-child { text-align: right; }
+  td {
+    padding: 6px;
+    border-bottom: 1px solid #f2f2f2;
+  }
+  .nominal {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #333;
+    white-space: nowrap;
+  }
+  input[type="number"] {
+    width: 100%;
+    max-width: 110px;
+    padding: 8px 10px;
+    font-size: 16px;
+    border: 1.5px solid #ddd;
+    border-radius: 8px;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"]:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+  .row-sum {
+    color: #888;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .total-box {
+    margin-top: 20px;
+    background: #1e293b;
+    color: #fff;
+    border-radius: 10px;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 18px;
+  }
+  .total-box .label { font-weight: 500; }
+  .total-box .value {
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .reset-btn {
+    margin-top: 12px;
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #555;
+    background: #f5f5f5;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .reset-btn:hover { background: #e8e8e8; }
+  .reset-btn:active { background: #ddd; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>💰 Подсчёт денег в кассе</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>Номинал</th>
+        <th>Кол-во</th>
+        <th>Сумма</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="total-box">
+    <span class="label">Итого:</span>
+    <span class="value" id="total">0.00</span>
+  </div>
+
+  <button class="reset-btn" id="reset">Очистить всё</button>
+</div>
+
+<script>
+  // Номиналы: [значение, подпись]
+  const NOMINALS = [
+    [500,  '500'],
+    [200,  '200'],
+    [100,  '100'],
+    [50,   '50'],
+    [20,   '20'],
+    [10,   '10'],
+    [5,    '5'],
+    [2,    '2'],
+    [1,    '1'],
+    [0.5,  '50 коп.'],
+    [0.2,  '20 коп.'],
+    [0.1,  '10 коп.'],
+    [0.05, '5 коп.'],
+    [0.02, '2 коп.'],
+    [0.01, '1 коп.'],
+  ];
+
+  const tbody = document.getElementById('rows');
+  const totalEl = document.getElementById('total');
+  const resetBtn = document.getElementById('reset');
+
+  // Создаём строки таблицы
+  NOMINALS.forEach(([value, label], i) => {
+    const tr = document.createElement('tr');
+
+    const tdNom = document.createElement('td');
+    tdNom.className = 'nominal';
+    tdNom.textContent = label;
+
+    const tdInput = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.step = '1';
+    input.placeholder = '0';
+    input.dataset.value = value;
+    input.addEventListener('input', recalc);
+    tdInput.appendChild(input);
+
+    const tdSum = document.createElement('td');
+    tdSum.className = 'row-sum';
+    tdSum.textContent = '0.00';
+    tdSum.id = 'sum-' + i;
+
+    tr.append(tdNom, tdInput, tdSum);
+    tbody.appendChild(tr);
+  });
+
+  const inputs = tbody.querySelectorAll('input');
+
+  function recalc() {
+    let total = 0;
+    inputs.forEach((input, i) => {
+      const nominal = parseFloat(input.dataset.value);
+      let count = parseInt(input.value, 10);
+      if (isNaN(count) || count < 0) count = 0;
+      const sum = nominal * count;
+      total += sum;
+      document.getElementById('sum-' + i).textContent =
+        sum ? sum.toFixed(2) : '0.00';
+    });
+    totalEl.textContent = total.toFixed(2);
+  }
+
+  resetBtn.addEventListener('click', () => {
+    inputs.forEach(inp => inp.value = '');
+    recalc();
+  });
+</script>
+</body>
+</html>
